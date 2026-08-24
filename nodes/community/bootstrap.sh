@@ -29,7 +29,7 @@ esac
 say "Installing Xray $XRAY_VER ($XRAY_ARCH)"
 mkdir -p "$CFG_DIR"
 curl -fsSL -o /tmp/xray.zip \
-  "https://github.com/XTLS/Xray-core/releases/download/$XRAY_VER/Xray-$XRAY_VER-$XRAY_ARCH.zip"
+  "https://github.com/XTLS/Xray-core/releases/download/$XRAY_VER/Xray-$XRAY_ARCH.zip"
 unzip -oq /tmp/xray.zip xray geoip.dat geosite.dat -d "$INSTALL_DIR"
 chmod +x "$INSTALL_DIR/xray"
 rm -f /tmp/xray.zip

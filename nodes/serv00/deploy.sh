@@ -28,7 +28,7 @@ esac
 mkdir -p "$BIN_DIR" "$INSTALL_DIR"
 
 say "Downloading Xray $XRAY_VER ($XRAY_ARCH)"
-URL="https://github.com/XTLS/Xray-core/releases/download/$XRAY_VER/Xray-$XRAY_VER-$XRAY_ARCH.zip"
+URL="https://github.com/XTLS/Xray-core/releases/download/$XRAY_VER/Xray-$XRAY_ARCH.zip"
 TMPZIP="$INSTALL_DIR/xray.zip"
 curl -fsSL -o "$TMPZIP" "$URL"
 unzip -oq "$TMPZIP" -d "$BIN_DIR"

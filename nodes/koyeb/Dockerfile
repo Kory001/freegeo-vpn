@@ -8,7 +8,7 @@ RUN apk add --no-cache curl unzip \
          *) echo "unsupported arch $TARGETARCH" && exit 1 ;; \
        esac \
     && curl -fsSL -o /tmp/xray.zip \
-       "https://github.com/XTLS/Xray-core/releases/download/$XRAY_VER/Xray-$XRAY_VER-$XRAY_ARCH.zip" \
+       "https://github.com/XTLS/Xray-core/releases/download/$XRAY_VER/Xray-$XRAY_ARCH.zip" \
     && unzip -o /tmp/xray.zip xray -d /out
 
 FROM alpine:3.20
