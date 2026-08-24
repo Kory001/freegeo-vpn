@@ -104,6 +104,8 @@ registry flag allows direct-exit fallback if a service flags the IP.
    `/docs`— workflow uses `gh-pages` via actions-deploy-pages).
 2. Serv00: enable *Run your own applications*, open TCP ports, run
    `nodes/serv00/deploy.sh`, then replace the matching seed entry's host/uuid.
-3. Koyeb: create account, connect ghcr image from `nodes/koyeb/ghcr.yml`
-   output, note `<app>.koyeb.app`, update seed.
+2. Koyeb: create app → connect GitHub repo `Kory001/freegeo-vpn` →
+   builder: Dockerfile, path `nodes/koyeb/Dockerfile` → set `VLESS_UUID`
+   env var → note `<app>.koyeb.app`, update seed.
+   (Koyeb builds the image itself; no ghcr pipeline needed.)
 4. Install the APK artifact on an Android phone and test connect/IP-check.

@@ -36,7 +36,7 @@ freegeo-vpn/
 ├── .github/workflows/   # GitHub Actions (health-check, keep-alive, APK builds)
 ├── nodes/
 │   ├── serv00/          # FreeBSD deploy script (VLESS+Reality + WARP)
-│   ├── koyeb/           # Docker image (VLESS+WS+TLS + WARP) + ghcr workflow
+│   ├── koyeb/           # Dockerfile (VLESS+WS+TLS) — built by Koyeb from Git
 │   └── community/       # one-line bootstrap for volunteer nodes
 ├── client/android/      # Kotlin/Jetpack Compose app (libXray tunnel engine)
 └── docs/                # architecture, registry API, community guide
