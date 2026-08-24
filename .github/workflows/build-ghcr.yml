@@ -33,12 +33,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: nodes/koyeb
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:latest
-            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ github.sha }}
+      - name: Build image
+        id: build
+        run: |
+          set -o pipefail
+          IMAGE="${{ env.REGISTRY }}/${{ steps.img.outputs.name }}"
+          if ! docker buildx build \
+              --platform linux/amd64 \
+              --progress=plain \
+              -t "$IMAGE:$GITHUB_SHA_SHORT" -t "$IMAGE:latest" \
+              --output type=docker \
+              nodes/koyeb 2>&1 | tee /tmp/build.log; then
+            echo "### Docker build failed — last 40 lines:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -40 /tmp/build.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -10 /tmp/build.log | while IFS= read -r line; do
+              echo "::error::${line:0:200}" || true
+            done
+            exit 1
+          fi
+        env:
+          GITHUB_SHA_SHORT: ${{ github.sha }}
+
+      - name: Push image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ steps.img.outputs.name }}"
+          docker push "$IMAGE:${GITHUB_SHA::7}"
+          docker push "$IMAGE:latest"
