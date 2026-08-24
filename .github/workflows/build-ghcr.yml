@@ -22,7 +22,7 @@ jobs:
 
       - name: Compute lowercase image name
         id: img
-        run: echo "name=${GITHUB_REPOSITORY,,}/xray-koyeb" >> "$GITHUB_OUTPUT"
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -58,6 +58,16 @@ jobs:
 
       - name: Push image
         run: |
+          set -o pipefail
           IMAGE="${{ env.REGISTRY }}/${{ steps.img.outputs.name }}"
-          docker push "$IMAGE:${GITHUB_SHA::7}"
-          docker push "$IMAGE:latest"
+          if ! docker push "$IMAGE:${GITHUB_SHA::7}" 2>&1 | tee /tmp/push.log && \
+             docker push "$IMAGE:latest" 2>&1 | tee -a /tmp/push.log; then
+            echo "### Push failed:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -20 /tmp/push.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -iE "denied|error|failed" /tmp/push.log | tail -5 | while IFS= read -r line; do
+              echo "::error::${line:0:200}"
+            done
+            exit 1
+          fi
