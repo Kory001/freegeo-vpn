@@ -24,8 +24,6 @@ jobs:
         id: img
         run: echo "name=${GITHUB_REPOSITORY,,}/xray-koyeb" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-qemu-action@v3
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to ghcr.io
@@ -39,7 +37,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: nodes/koyeb
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:latest
