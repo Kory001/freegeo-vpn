@@ -1,6 +1,7 @@
 package org.freegeo.vpn.engine
 
 import android.content.Context
+import org.freegeo.vpn.data.Node
 import org.json.JSONObject
 import java.io.File
 
@@ -15,7 +16,7 @@ object LibXrayBridge {
         if (payload != null) {
             request.put("payload", payload)
         }
-        val response = libxray.LibXray.invoke(request.toString())
+        val response = libXray.LibXray.invoke(request.toString())
         return JSONObject(response)
     }
 

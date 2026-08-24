@@ -184,6 +184,11 @@ class FreeGeoVpnService : VpnService() {
         var lastError: String? = null
             private set
 
+        fun reportError(message: String) {
+            lastError = message
+            state.value = ConnectionState.ERROR
+        }
+
         @Synchronized
         private fun setState(s: ConnectionState) {
             state.value = s

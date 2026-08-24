@@ -36,7 +36,8 @@ class SecurePrefs(context: Context) {
         .apply()
 
     fun toggleFavorite(id: String): Set<String> {
-        val next = favorites() xor setOf(id)
+        val current = favorites()
+        val next = if (id in current) current - id else current + id
         setFavorites(next)
         return next
     }

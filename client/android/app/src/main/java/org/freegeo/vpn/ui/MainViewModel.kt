@@ -127,8 +127,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun failed(message: String) {
-        FreeGeoVpnService.lastError = message
-        FreeGeoVpnService.state.value = ConnectionState.ERROR
+        FreeGeoVpnService.reportError(message)
     }
 
     fun checkIp() {

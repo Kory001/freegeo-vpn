@@ -10,7 +10,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/xray-koyeb
 
 jobs:
   build-push:
@@ -20,6 +19,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Compute lowercase image name
+        id: img
+        run: echo "name=${GITHUB_REPOSITORY,,}/xray-koyeb" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
 
@@ -39,5 +42,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:latest
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ github.sha }}
