@@ -1,0 +1,32 @@
+# Generated files
+registry.json
+registry/health-state.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Android / Gradle
+client/android/.gradle/
+client/android/build/
+client/android/local.properties
+client/android/app/build/
+client/android/app/libs/
+client/android/app/src/main/jniLibs/
+*.keystore
+!client/android/keystore-debug.keystore
+*.jks
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & local env
+.env
+*.local

@@ -1,0 +1,66 @@
+name: health-check
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "registry/**"
+      - ".github/workflows/health-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: health-check
+  cancel-in-progress: false
+
+jobs:
+  check-and-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        working-directory: registry
+        run: pip install -r requirements.txt
+
+      - name: Run health-checker
+        working-directory: registry
+        run: python3 generate.py --seed seed.json --output ../registry.json
+
+      - name: Prepare Pages site
+        run: |
+          mkdir -p site
+          cp registry.json site/
+          cat > site/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>FreeGeo VPN registry</title>
+          <p>Client endpoint: <a href="registry.json">registry.json</a></p>
+          HTML
+
+      - name: Commit updated state (failure counters)
+        working-directory: registry
+        run: |
+          git config user.name "freegeo-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add health-state.json
+          git diff --cached --quiet || git commit -m "health-check: update node state [skip ci]"
+          git push
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

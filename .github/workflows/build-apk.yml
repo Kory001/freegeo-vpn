@@ -1,0 +1,51 @@
+name: build-apk
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "client/android/**"
+      - ".github/workflows/build-apk.yml"
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client/android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Fetch tunnel deps (libXray + tun2socks)
+        working-directory: client/android
+        run: |
+          chmod +x fetch-deps.sh
+          ./fetch-deps.sh
+
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freegeo-debug-apk
+          path: client/android/app/build/outputs/apk/debug/*.apk
+
+      - name: Build release APK (unsigned)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: freegeo-release-apk-unsigned
+          path: client/android/app/build/outputs/apk/release/*.apk

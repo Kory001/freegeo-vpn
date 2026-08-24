@@ -1,0 +1,22 @@
+name: keep-alive
+
+on:
+  schedule:
+    - cron: "*/50 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping node through platform edge
+        run: |
+          set +e
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 \
+            "${NODE_URL:-https://REPLACE-ME.koyeb.app/}")
+          echo "edge responded: $code"
+          if [ "$code" = "000" ]; then
+            echo "Node unreachable at the edge"; exit 1
+          fi
+        env:
+          NODE_URL: ${{ secrets.FREEGEO_NODE_URL }}

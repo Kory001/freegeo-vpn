@@ -1,0 +1,58 @@
+{
+  "defaultCountry": "us",
+  "domainRoutes": [
+    { "country": "us", "domains": ["netflix.com", "nflxvideo.net"] },
+    { "country": "gb", "domains": ["bbc.co.uk"] }
+  ],
+  "nodes": [
+    {
+      "id": "serv00-waw-1",
+      "country": "pl",
+      "flag": "\ud83c\uddf5\ud83c\uddf1",
+      "name": "Warsaw",
+      "platform": "serv00",
+      "protocol": "vless",
+      "network": "tcp",
+      "host": "REPLACE-ME.serv00.com",
+      "port": 443,
+      "tls": { "sni": "REPLACE-ME.serv00.com" },
+      "uuid": "00000000-0000-0000-0000-000000000001",
+      "warp": true,
+      "status": "new",
+      "bandwidth": "high"
+    },
+    {
+      "id": "ct8-de-1",
+      "country": "de",
+      "flag": "\ud83c\udde9\ud83c\uddea",
+      "name": "Germany (CT8)",
+      "platform": "ct8",
+      "protocol": "vless",
+      "network": "tcp",
+      "host": "REPLACE-ME.ct8.pl",
+      "port": 443,
+      "tls": { "sni": "REPLACE-ME.ct8.pl" },
+      "uuid": "00000000-0000-0000-0000-000000000002",
+      "warp": true,
+      "status": "new",
+      "bandwidth": "high"
+    },
+    {
+      "id": "koyeb-fra-1",
+      "country": "de",
+      "flag": "\ud83c\udde9\ud83c\uddea",
+      "name": "Frankfurt",
+      "platform": "koyeb",
+      "protocol": "vless",
+      "network": "ws",
+      "host": "REPLACE-ME.koyeb.app",
+      "port": 443,
+      "path": "/vless?ed=2560",
+      "tls": { "sni": "REPLACE-ME.koyeb.app", "alpn": ["http/1.1"] },
+      "uuid": "00000000-0000-0000-0000-000000000003",
+      "warp": true,
+      "status": "new",
+      "bandwidth": "low"
+    }
+  ]
+}
