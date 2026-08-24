@@ -76,8 +76,10 @@ registry flag allows direct-exit fallback if a service flags the IP.
 ## Build & release
 
 - `.github/workflows/health-check.yml`: hourly cron + push → generate.py →
-  commit `registry.json` → Pages deploy. Also keeps the repo "active" so GH
-  doesn't disable scheduled workflows after 60 days idle.
+  Pages deploy. Failure counters persist via workflow cache (no repo writes,
+  so the read-only GITHUB_TOKEN on new repos is sufficient). The hourly runs
+  also keep the repo "active" so GH doesn't disable scheduled workflows after
+  60 days idle.
 - `.github/workflows/keep-alive.yml`: pings Koyeb `/probe` every ~50 min so its
   free instance never scales to zero (1 h idle limit).
 - `.github/workflows/build-apk.yml`: debug APK artifact on every push; release

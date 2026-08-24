@@ -44,6 +44,6 @@ class RegistryRepository(context: Context) {
 
     companion object {
         const val DEFAULT_REGISTRY_URL =
-            "https://REPLACE-ORG.github.io/freegeo-vpn/registry.json"
+            "https://kory001.github.io/freegeo-vpn/registry.json"
     }
 }

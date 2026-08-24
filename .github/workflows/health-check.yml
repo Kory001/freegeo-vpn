@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -27,6 +27,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore node health state
+        uses: actions/cache@v4
+        with:
+          path: registry/health-state.json
+          key: freegeo-health-state-v1
 
       - uses: actions/setup-python@v5
         with:
@@ -48,15 +54,6 @@ jobs:
           <!doctype html><meta charset="utf-8"><title>FreeGeo VPN registry</title>
           <p>Client endpoint: <a href="registry.json">registry.json</a></p>
           HTML
-
-      - name: Commit updated state (failure counters)
-        working-directory: registry
-        run: |
-          git config user.name "freegeo-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add health-state.json
-          git diff --cached --quiet || git commit -m "health-check: update node state [skip ci]"
-          git push
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -28,7 +28,7 @@ declare -A ABIS=(
 for abi in "${!ABIS[@]}"; do
   dir="app/src/main/jniLibs/$abi"
   mkdir -p "$dir"
-  curl -fsSL -o "$dir/libtun2socks.so" "$BASE/hev-socks5-tunnel-$TUN2SOCKS_VER-android-${ABIS[$abi]}"
+  curl -fsSL -o "$dir/libtun2socks.so" "$BASE/hev-socks5-tunnel-android-${ABIS[$abi]}"
   chmod +x "$dir/libtun2socks.so"
 done
 
