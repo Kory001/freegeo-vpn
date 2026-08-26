@@ -28,8 +28,13 @@ Internet
 
 | Tier | Nodes | Role |
 |---|---|---|
-| Cardless backbone | Serv00 Warsaw ×2 · CT8 Germany · Koyeb FRA (+ IAD via 2nd account) | Reliability. Serv00 ≈1 Gbps unlimited. Koyeb free = 0.1 vCPU/512 MB, browsing only |
+| Cardless backbone | Render Frankfurt (primary) · CT8 Germany (when registration reopens) | Reliability. Render free = 512 MB/0.1 vCPU, 750 h/month, 15-min idle spin-down (mitigated by keep-alive pings) |
 | Community | SE Asia priority (MY/TH/ID/VN/PH), then BR/IN/any volunteer | Low-flagged IPs, regional content |
+
+> Koyeb was dropped as a backbone: Mistral acquired it (2026-02) and closed
+> the free tier to new signups. Serv00 registrations were also unreachable
+> during setup. Both scripts remain in `nodes/` for anyone with existing
+> accounts.
 
 ### Protocol selection
 
@@ -104,8 +109,8 @@ registry flag allows direct-exit fallback if a service flags the IP.
    `/docs`— workflow uses `gh-pages` via actions-deploy-pages).
 2. Serv00: enable *Run your own applications*, open TCP ports, run
    `nodes/serv00/deploy.sh`, then replace the matching seed entry's host/uuid.
-2. Koyeb: create app → connect GitHub repo `Kory001/freegeo-vpn` →
-   builder: Dockerfile, path `nodes/koyeb/Dockerfile` → set `VLESS_UUID`
-   env var → note `<app>.koyeb.app`, update seed.
-   (Koyeb builds the image itself; no ghcr pipeline needed.)
+2. Render: sign up with GitHub (no card) → New Web Service → Docker →
+   Dockerfile path `./nodes/render/Dockerfile` → set `VLESS_UUID` env var →
+   note `<app>.onrender.com`, update seed. See `nodes/render/README.md`.
+   (CT8: registration reopens periodically — check ct8.pl; needs a Polish IP.)
 4. Install the APK artifact on an Android phone and test connect/IP-check.
