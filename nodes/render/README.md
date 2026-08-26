@@ -12,7 +12,8 @@ managed TLS on `*.onrender.com`. Spins down after 15 min idle — the
    - **Runtime:** Docker
    - **Dockerfile path:** `./nodes/render/Dockerfile`
    - **Docker context:** `./nodes/render`
-   - **Region:** Frankfurt
+   - **Region:** whichever the free tier offers (Oregon/US-West at minimum;
+     Frankfurt/Singapore if available)
    - **Instance type:** Free
 4. Environment variables:
 

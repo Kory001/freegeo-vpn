@@ -28,7 +28,7 @@ Internet
 
 | Tier | Nodes | Role |
 |---|---|---|
-| Cardless backbone | Render Frankfurt (primary) · CT8 Germany (when registration reopens) | Reliability. Render free = 512 MB/0.1 vCPU, 750 h/month, 15-min idle spin-down (mitigated by keep-alive pings) |
+| Cardless backbone | Render Oregon/US-West (primary; free-tier region availability varies) · CT8 Germany (when registration reopens) | Reliability. Render free = 512 MB/0.1 vCPU, 750 h/month, 15-min idle spin-down (mitigated by keep-alive pings) |
 | Community | SE Asia priority (MY/TH/ID/VN/PH), then BR/IN/any volunteer | Low-flagged IPs, regional content |
 
 > Koyeb was dropped as a backbone: Mistral acquired it (2026-02) and closed
