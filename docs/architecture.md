@@ -31,10 +31,12 @@ Internet
 | Cardless backbone | Render Oregon/US-West (primary; free-tier region availability varies) · CT8 Germany (when registration reopens) | Reliability. Render free = 512 MB/0.1 vCPU, 750 h/month, 15-min idle spin-down (mitigated by keep-alive pings) |
 | Community | SE Asia priority (MY/TH/ID/VN/PH), then BR/IN/any volunteer | Low-flagged IPs, regional content |
 
-> Koyeb was dropped as a backbone: Mistral acquired it (2026-02) and closed
-> the free tier to new signups. Serv00 registrations were also unreachable
-> during setup. Both scripts remain in `nodes/` for anyone with existing
-> accounts.
+> Backbone history (2026): Serv00 registrations unreachable · Koyeb free tier
+> closed after Mistral acquisition · Render bans proxy workloads on signup ·
+> HF Spaces made Docker SDK paid · CT8 registration periodically full
+> (needs Polish IP). **Conclusion: the free-PaaS backbone era is over —
+> community-run nodes are the primary backbone now.** The `nodes/*/`
+> recipes remain valid for anyone who holds such accounts.
 
 ### Protocol selection
 
