@@ -9,7 +9,7 @@ import java.io.File
 
 object LibXrayBridge {
 
-    private val API_VERSIONS_TO_TRY = intArrayOf(2, 1, 3, 0)
+    private val API_VERSIONS_TO_TRY = intArrayOf(1, 0, 2, 3)
 
     fun invoke(method: String, payload: JSONObject?): JSONObject {
         var lastErr: Throwable? = null
@@ -24,14 +24,21 @@ object LibXrayBridge {
                     throw RuntimeException("libXray invoke failed (${t::class.simpleName}): ${t.message}", t)
                 }
                 val obj = JSONObject(raw)
-                if (!obj.optBoolean("success") && obj.optString("error").contains("unsupported apiVersion", ignoreCase = true)) {
-                    lastErr = RuntimeException(obj.optString("error"))
+                val errStr = obj.optString("error")
+                if (!obj.optBoolean("success") && errStr.contains("unsupported apiVersion", ignoreCase = true)) {
+                    lastErr = RuntimeException(errStr)
                     android.util.Log.w("TunnelEngine", "apiVersion $ver unsupported, trying next")
+                    continue
+                }
+                if (!obj.optBoolean("success") && errStr.contains("unknown method", ignoreCase = true)) {
+                    lastErr = RuntimeException(errStr)
+                    android.util.Log.w("TunnelEngine", "method $method unknown for ver $ver")
                     continue
                 }
                 return obj
             } catch (t: Throwable) {
-                if (t.message?.contains("unsupported apiVersion", ignoreCase = true) == true) {
+                if (t.message?.contains("unsupported apiVersion", ignoreCase = true) == true ||
+                    t.message?.contains("unknown method", ignoreCase = true) == true) {
                     lastErr = t
                     continue
                 }
@@ -41,14 +48,35 @@ object LibXrayBridge {
         throw lastErr ?: RuntimeException("unsupported apiVersion: all versions failed")
     }
 
-    fun runXray(xrayJson: String): Result<Unit> = runCatching {
-        val resp = invoke("runXray", JSONObject().put("xrayJson", xrayJson))
-        if (!resp.optBoolean("success")) {
-            val err = resp.optString("error", "runXray failed")
-            Log.e("TunnelEngine", "runXray failed: $err\nConfig: ${xrayJson.take(500)}")
-            error(err)
+    private fun tryRunXray(json: String): Result<Unit> {
+        val payloads = listOf(
+            "runXrayFromJson" to JSONObject().put("configJSON", json),
+            "runXray" to JSONObject().put("xrayJson", json),
+            "runXray" to JSONObject().put("configPath", json)
+        )
+        var last: Throwable? = null
+        for ((method, payload) in payloads) {
+            val res = runCatching {
+                val resp = invoke(method, payload)
+                if (!resp.optBoolean("success")) {
+                    val err = resp.optString("error", "$method failed")
+                    if (err.contains("unknown method", ignoreCase = true)) throw RuntimeException(err)
+                    Log.e("TunnelEngine", "$method failed: $err")
+                    error(err)
+                }
+            }
+            if (res.isSuccess) return res
+            val ex = res.exceptionOrNull()
+            if (ex?.message?.contains("unknown method", ignoreCase = true) == true) {
+                last = ex
+                continue
+            }
+            return res
         }
+        return Result.failure(last ?: RuntimeException("runXray failed"))
     }
+
+    fun runXray(xrayJson: String): Result<Unit> = tryRunXray(xrayJson)
 
     fun stopXray(): Result<Unit> = runCatching {
         try {
