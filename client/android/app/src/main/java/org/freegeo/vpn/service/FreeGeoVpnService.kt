@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import org.freegeo.vpn.MainActivity
 import org.freegeo.vpn.R
 import org.freegeo.vpn.data.Node
+import org.freegeo.vpn.data.WarpAccount
 import org.freegeo.vpn.engine.TunnelEngine
 
 enum class ConnectionState { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
@@ -48,8 +49,16 @@ class FreeGeoVpnService : VpnService() {
         setState(ConnectionState.CONNECTING)
         startForeground(NOTIF_ID, buildNotification(getString(R.string.notif_connecting)))
 
-        val node = currentConfiguredNode ?: run {
+        val isWarp = useWarp && currentWarpAccount != null
+        val node = currentConfiguredNode
+        val warp = currentWarpAccount
+
+        if (!isWarp && node == null) {
             fail("No node selected")
+            return
+        }
+        if (isWarp && warp == null) {
+            fail("WARP account not ready")
             return
         }
 
@@ -57,16 +66,20 @@ class FreeGeoVpnService : VpnService() {
             try {
                 val fd = establishInterface() ?: error("VPN permission not granted")
                 tunInterface = fd
-                engine!!.start(node, fd.detachFd())
-                    .onFailure { throw it }
+                val result = if (isWarp) {
+                    engine!!.startWarp(warp!!, fd.detachFd())
+                } else {
+                    engine!!.start(node!!, fd.detachFd())
+                }
+                result.onFailure { throw it }
 
                 setState(ConnectionState.CONNECTED)
-                updateNotification(
-                    getString(
-                        R.string.notif_connected,
-                        "${node.flag} ${node.name} · ${node.latencyMs ?: "?"} ms"
-                    )
-                )
+                val label = if (isWarp) {
+                    "WARP · Cloudflare"
+                } else {
+                    "${node!!.flag} ${node.name} · ${node.latencyMs ?: "?"} ms"
+                }
+                updateNotification(getString(R.string.notif_connected, label))
                 monitorLoop()
             } catch (e: Exception) {
                 fail(e.message ?: "Connection failed")
@@ -180,6 +193,8 @@ class FreeGeoVpnService : VpnService() {
 
         val state = kotlinx.coroutines.flow.MutableStateFlow(ConnectionState.DISCONNECTED)
         var currentConfiguredNode: Node? = null
+        var currentWarpAccount: WarpAccount? = null
+        var useWarp: Boolean = false
         var bypassApps: List<String> = emptyList()
         var lastError: String? = null
             private set

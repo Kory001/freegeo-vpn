@@ -13,6 +13,8 @@ import org.freegeo.vpn.data.Node
 import org.freegeo.vpn.data.Registry
 import org.freegeo.vpn.data.RegistryRepository
 import org.freegeo.vpn.data.SecurePrefs
+import org.freegeo.vpn.data.WarpAccount
+import org.freegeo.vpn.data.WarpProvisioner
 import org.freegeo.vpn.service.ConnectionState
 import org.freegeo.vpn.service.FreeGeoVpnService
 import org.json.JSONObject
@@ -28,7 +30,10 @@ data class UiState(
     val searchQuery: String = "",
     val ipCheckResult: String? = null,
     val ipChecking: Boolean = false,
-    val registryUrlDraft: String = ""
+    val registryUrlDraft: String = "",
+    val warpProvisioning: Boolean = false,
+    val warpError: String? = null,
+    val hasWarpAccount: Boolean = false
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -46,6 +51,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (FreeGeoVpnService.state.value == ConnectionState.DISCONNECTED) {
             FreeGeoVpnService.bypassApps = emptyList()
         }
+        _ui.value = _ui.value.copy(hasWarpAccount = prefs.warpAccountJson != null)
     }
 
     fun refreshRegistry() {
@@ -118,8 +124,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun connect() {
         val node = _ui.value.selectedNode ?: return
+        FreeGeoVpnService.useWarp = false
+        FreeGeoVpnService.currentWarpAccount = null
         FreeGeoVpnService.currentConfiguredNode = node
         FreeGeoVpnService.state.value = ConnectionState.CONNECTING
+    }
+
+    fun connectWarp(onReady: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            _ui.value = _ui.value.copy(warpProvisioning = true, warpError = null)
+            val existing = prefs.warpAccountJson?.let { runCatching { WarpAccount.fromJson(it) }.getOrNull() }
+            if (existing != null) {
+                FreeGeoVpnService.useWarp = true
+                FreeGeoVpnService.currentWarpAccount = existing
+                FreeGeoVpnService.currentConfiguredNode = null
+                _ui.value = _ui.value.copy(warpProvisioning = false, hasWarpAccount = true)
+                onReady()
+                return@launch
+            }
+            val result = withContext(Dispatchers.IO) { WarpProvisioner.register() }
+            result.fold(
+                onSuccess = { account ->
+                    prefs.warpAccountJson = account.toJson()
+                    FreeGeoVpnService.useWarp = true
+                    FreeGeoVpnService.currentWarpAccount = account
+                    FreeGeoVpnService.currentConfiguredNode = null
+                    _ui.value = _ui.value.copy(warpProvisioning = false, hasWarpAccount = true, warpError = null)
+                    onReady()
+                },
+                onFailure = { e ->
+                    _ui.value = _ui.value.copy(warpProvisioning = false, warpError = e.message ?: "WARP registration failed")
+                    onError(e.message ?: "WARP failed")
+                }
+            )
+        }
+    }
+
+    fun clearWarpAccount() {
+        prefs.warpAccountJson = null
+        _ui.value = _ui.value.copy(hasWarpAccount = false, warpError = null)
     }
 
     fun connected() {

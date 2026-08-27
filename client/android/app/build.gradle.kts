@@ -58,5 +58,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 }

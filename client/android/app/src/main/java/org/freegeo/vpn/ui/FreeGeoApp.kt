@@ -16,10 +16,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,8 +41,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.freegeo.vpn.data.Node
 import org.freegeo.vpn.service.ConnectionState
 import org.freegeo.vpn.service.FreeGeoVpnService
@@ -53,6 +58,7 @@ private val Danger = Color(0xFFFF5370)
 fun FreeGeoApp(
     viewModel: MainViewModel,
     onConnectClick: () -> Unit,
+    onWarpConnectClick: () -> Unit,
     onDisconnectClick: () -> Unit
 ) {
     val ui by viewModel.ui.collectAsState()
@@ -81,6 +87,7 @@ fun FreeGeoApp(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    WarpQuickConnectCard(viewModel, ui, connection, onWarpConnectClick, onDisconnectClick)
                     StatusCard(ui, connection)
                     IpCheckRow(viewModel, ui)
 
@@ -151,6 +158,80 @@ private fun ConnectFab(
             Spacer(Modifier.size(8.dp))
         }
         Text(label)
+    }
+}
+
+@Composable
+private fun WarpQuickConnectCard(
+    viewModel: MainViewModel,
+    ui: UiState,
+    connection: ConnectionState,
+    onWarpConnect: () -> Unit,
+    onDisconnect: () -> Unit
+) {
+    val isWarpConnected = connection == ConnectionState.CONNECTED && FreeGeoVpnService.useWarp
+    val isWarpConnecting = (connection == ConnectionState.CONNECTING && FreeGeoVpnService.useWarp) || ui.warpProvisioning
+    Card(
+        colors = CardDefaults.cardColors(containerColor = if (isWarpConnected) Accent.copy(alpha = 0.18f) else Color(0xFF1E2530)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Bolt, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.size(8.dp))
+                Text("Quick Connect — WARP", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(Modifier.weight(1f))
+                if (ui.hasWarpAccount) {
+                    Text("ready", color = Accent, fontSize = 11.sp)
+                } else {
+                    Text("no signup", color = Color.Gray, fontSize = 11.sp)
+                }
+            }
+            Text(
+                "No server needed. Bypasses ISP blocks for Discord / Telegram / X instantly. For changing country (Netflix, Play Store region) use nodes below when available.",
+                color = Color(0xFF9AA4B2),
+                fontSize = 12.sp,
+                lineHeight = 16.sp
+            )
+            if (ui.warpError != null) {
+                Text(ui.warpError, color = Danger, fontSize = 12.sp)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                when {
+                    isWarpConnected -> Button(
+                        onClick = onDisconnect,
+                        colors = ButtonDefaults.buttonColors(containerColor = Danger, contentColor = Color.White)
+                    ) { Text("DISCONNECT WARP") }
+                    isWarpConnecting -> Button(
+                        onClick = onDisconnect,
+                        enabled = false,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                        Spacer(Modifier.size(8.dp))
+                        Text(if (ui.warpProvisioning) "Registering…" else "Connecting…")
+                    }
+                    else -> Button(
+                        onClick = {
+                            viewModel.connectWarp(
+                                onReady = onWarpConnect,
+                                onError = {}
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.Black)
+                    ) {
+                        Icon(Icons.Filled.Bolt, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text("CONNECT WARP")
+                    }
+                }
+                if (!isWarpConnected && !isWarpConnecting && ui.hasWarpAccount) {
+                    TextButton(onClick = { viewModel.clearWarpAccount() }) {
+                        Text("Reset", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
     }
 }
 

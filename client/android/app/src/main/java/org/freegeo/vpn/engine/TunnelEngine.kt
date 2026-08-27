@@ -2,6 +2,7 @@ package org.freegeo.vpn.engine
 
 import android.content.Context
 import org.freegeo.vpn.data.Node
+import org.freegeo.vpn.data.WarpAccount
 import org.json.JSONObject
 import java.io.File
 
@@ -41,6 +42,11 @@ class TunnelEngine(private val context: Context) {
 
     fun start(node: Node, tunFd: Int): Result<Unit> =
         LibXrayBridge.runXray(XrayConfigBuilder.build(node)).mapCatching {
+            startTun2Socks(tunFd)
+        }
+
+    fun startWarp(account: WarpAccount, tunFd: Int): Result<Unit> =
+        LibXrayBridge.runXray(XrayConfigBuilder.buildWarp(account)).mapCatching {
             startTun2Socks(tunFd)
         }
 

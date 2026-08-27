@@ -1,6 +1,7 @@
 package org.freegeo.vpn.engine
 
 import org.freegeo.vpn.data.Node
+import org.freegeo.vpn.data.WarpAccount
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -14,6 +15,42 @@ object XrayConfigBuilder {
         root.put("dns", buildDns())
         root.put("inbounds", JSONArray().put(buildSocksInbound()))
         root.put("outbounds", buildOutbounds(node))
+        root.put("routing", buildRouting())
+        return root.toString()
+    }
+
+    fun buildWarp(account: WarpAccount): String {
+        val root = JSONObject()
+        root.put("log", JSONObject().put("loglevel", "warning"))
+        root.put("dns", buildDns())
+        root.put("inbounds", JSONArray().put(buildSocksInbound()))
+
+        val wg = JSONObject()
+            .put("tag", "proxy")
+            .put("protocol", "wireguard")
+            .put(
+                "settings",
+                JSONObject()
+                    .put("secretKey", account.privateKeyB64)
+                    .put("address", JSONArray().put(account.addressV4).put(account.addressV6))
+                    .put("peers", JSONArray().put(
+                        JSONObject()
+                            .put("publicKey", account.peerPublicKey)
+                            .put("endpoint", account.endpoint)
+                    ))
+                    .put("mtu", 1280)
+                    .put("reserved", JSONArray(account.reservedBytes().toList()))
+                    .put("noKernelTun", true)
+            )
+
+        root.put(
+            "outbounds",
+            JSONArray()
+                .put(wg)
+                .put(JSONObject().put("tag", "dns-out").put("protocol", "dns"))
+                .put(JSONObject().put("tag", "direct").put("protocol", "freedom"))
+                .put(JSONObject().put("tag", "block").put("protocol", "blackhole"))
+        )
         root.put("routing", buildRouting())
         return root.toString()
     }

@@ -14,42 +14,63 @@ import org.freegeo.vpn.ui.MainViewModel
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private var pendingWarp: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             FreeGeoApp(
                 viewModel = viewModel,
-                onConnectClick = { requestVpnAndConnect() },
+                onConnectClick = { requestVpnAndConnectNode() },
+                onWarpConnectClick = { requestVpnAndConnectWarp() },
                 onDisconnectClick = { stopService(Intent(this, FreeGeoVpnService::class.java)) }
             )
         }
     }
 
-    private fun requestVpnAndConnect() {
+    private fun requestVpnAndConnectNode() {
+        pendingWarp = false
         val intent = VpnService.prepare(this)
         if (intent == null) {
-            startTunnel()
+            startTunnelNode()
         } else {
             startActivityForResult(intent, VPN_REQUEST_CODE)
         }
+    }
+
+    private fun requestVpnAndConnectWarp() {
+        viewModel.connectWarp(
+            onReady = {
+                pendingWarp = true
+                val intent = VpnService.prepare(this@MainActivity)
+                if (intent == null) {
+                    startTunnelWarp()
+                } else {
+                    startActivityForResult(intent, VPN_REQUEST_CODE)
+                }
+            },
+            onError = { msg -> viewModel.failed(msg) }
+        )
     }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == VPN_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            startTunnel()
-        } else {
+            if (pendingWarp) startTunnelWarp() else startTunnelNode()
+        } else if (requestCode == VPN_REQUEST_CODE) {
             viewModel.failed("VPN permission denied")
         }
     }
 
-    private fun startTunnel() {
+    private fun startTunnelNode() {
+        pendingWarp = false
         viewModel.connect()
-        startForegroundService(
-            Intent(this, FreeGeoVpnService::class.java)
-        )
+        startForegroundService(Intent(this, FreeGeoVpnService::class.java))
+    }
+
+    private fun startTunnelWarp() {
+        startForegroundService(Intent(this, FreeGeoVpnService::class.java))
     }
 
     companion object {

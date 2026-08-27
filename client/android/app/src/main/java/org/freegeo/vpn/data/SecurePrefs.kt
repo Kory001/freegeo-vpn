@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.KeyStore
-import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -65,13 +64,13 @@ class SecurePrefs(context: Context) {
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
         val iv = cipher.iv
         val data = cipher.doFinal(text.toByteArray(Charsets.UTF_8))
-        return Base64.getEncoder().encodeToString(iv + data)
+        return android.util.Base64.encodeToString(iv + data, android.util.Base64.NO_WRAP)
     }
 
     private fun decrypt(stored: String?): String? {
         stored ?: return null
         return runCatching {
-            val all = Base64.getDecoder().decode(stored)
+            val all = android.util.Base64.decode(stored, android.util.Base64.NO_WRAP)
             val iv = all.copyOfRange(0, 12)
             val data = all.copyOfRange(12, all.size)
             val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -80,6 +79,12 @@ class SecurePrefs(context: Context) {
         }.getOrNull()
     }
 
+    var warpAccountJson: String?
+        get() = decrypt(plain.getString(KEY_WARP_ACCOUNT, null))
+        set(value) = plain.edit()
+            .putString(KEY_WARP_ACCOUNT, value?.let(::encrypt))
+            .apply()
+
     companion object {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_ALIAS = "freegeo_master"
@@ -87,5 +92,6 @@ class SecurePrefs(context: Context) {
         private const val KEY_REGISTRY_URL = "registry_url"
         private const val KEY_SELECTED_NODE = "selected_node"
         private const val KEY_FAVORITES = "favorites"
+        private const val KEY_WARP_ACCOUNT = "warp_account"
     }
 }
