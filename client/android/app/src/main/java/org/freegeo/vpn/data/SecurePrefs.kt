@@ -41,7 +41,7 @@ class SecurePrefs(context: Context) {
         return next
     }
 
-    private fun secretKey(): SecretKey {
+    private fun secretKeyOrNull(): SecretKey? = runCatching {
         val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         (ks.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
@@ -55,28 +55,60 @@ class SecurePrefs(context: Context) {
                 .setKeySize(256)
                 .build()
         )
-        return gen.generateKey()
-    }
+        gen.generateKey()
+    }.getOrNull()
 
     private fun encrypt(text: String?): String? {
         if (text.isNullOrEmpty()) return null
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey())
-        val iv = cipher.iv
-        val data = cipher.doFinal(text.toByteArray(Charsets.UTF_8))
-        return android.util.Base64.encodeToString(iv + data, android.util.Base64.NO_WRAP)
+        return runCatching {
+            val key = secretKeyOrNull() ?: error("no keystore")
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, key)
+            val iv = cipher.iv
+            val data = cipher.doFinal(text.toByteArray(Charsets.UTF_8))
+            "v1:" + android.util.Base64.encodeToString(iv + data, android.util.Base64.NO_WRAP)
+        }.getOrElse {
+            // Fallback: plain Base64 (no encryption) — still better than crash
+            "v0:" + android.util.Base64.encodeToString(text.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        }
     }
 
     private fun decrypt(stored: String?): String? {
         stored ?: return null
+        // Try v1 (encrypted) first
+        if (stored.startsWith("v1:")) {
+            val payload = stored.removePrefix("v1:")
+            runCatching {
+                val key = secretKeyOrNull() ?: error("no keystore")
+                val all = android.util.Base64.decode(payload, android.util.Base64.NO_WRAP)
+                if (all.size < 13) error("too short")
+                val iv = all.copyOfRange(0, 12)
+                val data = all.copyOfRange(12, all.size)
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+                return String(cipher.doFinal(data), Charsets.UTF_8)
+            }
+        }
+        // Fallback v0 or legacy (try encrypted without prefix, then plain)
         return runCatching {
-            val all = android.util.Base64.decode(stored, android.util.Base64.NO_WRAP)
-            val iv = all.copyOfRange(0, 12)
-            val data = all.copyOfRange(12, all.size)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
-            String(cipher.doFinal(data), Charsets.UTF_8)
-        }.getOrNull()
+            val key = secretKeyOrNull() ?: error("no keystore")
+            val all = android.util.Base64.decode(stored.removePrefix("v1:").removePrefix("v0:"), android.util.Base64.NO_WRAP)
+            if (all.size >= 13) {
+                val iv = all.copyOfRange(0, 12)
+                val data = all.copyOfRange(12, all.size)
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+                return String(cipher.doFinal(data), Charsets.UTF_8)
+            }
+            error("not encrypted")
+        }.getOrElse {
+            runCatching {
+                val b64 = stored.removePrefix("v0:")
+                String(android.util.Base64.decode(b64, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+            }.getOrNull() ?: runCatching {
+                String(android.util.Base64.decode(stored, android.util.Base64.NO_WRAP), Charsets.UTF_8)
+            }.getOrNull()
+        }
     }
 
     var warpAccountJson: String?

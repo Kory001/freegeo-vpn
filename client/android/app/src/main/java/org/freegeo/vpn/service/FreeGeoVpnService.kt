@@ -136,15 +136,23 @@ class FreeGeoVpnService : VpnService() {
     }
 
     private fun fail(message: String) {
+        android.util.Log.e("FreeGeoVPN", "fail: $message")
         lastError = message
         setState(ConnectionState.ERROR)
         runCatching {
             tunInterface?.close()
             tunInterface = null
         }
-        engine?.stop()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        try { engine?.stop() } catch (_: Throwable) {}
+        try {
+            val errNotif = notification("Error: $message")
+            notifyManager().notify(NOTIF_ID, errNotif)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (_: Throwable) {
+            try { stopForeground(STOP_FOREGROUND_REMOVE) } catch (_: Throwable) {}
+        }
+        // Don't call stopSelf() immediately — keep process alive so Activity stays and shows error
+        // Service will be stopped on next disconnect() or destroy
     }
 
     override fun onDestroy() {

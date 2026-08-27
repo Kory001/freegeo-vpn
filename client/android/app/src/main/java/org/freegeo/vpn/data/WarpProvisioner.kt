@@ -55,7 +55,11 @@ data class WarpAccount(
 
 object WarpProvisioner {
 
-    private const val API = "https://api.cloudflareclient.com/v0a2158/reg"
+    private val APIS = listOf(
+        "https://api.cloudflareclient.com/v0a2158/reg" to "a-6.30-2158",
+        "https://api.cloudflareclient.com/v0a4005/reg" to "a-6.30-4005",
+        "https://api.cloudflareclient.com/v0a1901/reg" to "a-6.10-1901"
+    )
     private const val DEFAULT_ENDPOINT = "engage.cloudflareclient.com:2408"
 
     fun register(): Result<WarpAccount> = runCatching {
@@ -73,43 +77,66 @@ object WarpProvisioner {
             .put("model", "PC")
             .put("locale", "en_US")
 
-        val conn = URL(API).openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 15_000
-        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-        conn.setRequestProperty("User-Agent", "okhttp/3.12.1")
-        conn.setRequestProperty("CF-Client-Version", "a-6.30-2158")
-        conn.doOutput = true
-        try {
-            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            if (conn.responseCode !in 200..299) {
-                val errBody = runCatching {
-                    (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
-                }.getOrNull() ?: ""
-                error("WARP registration failed: HTTP ${conn.responseCode} $errBody")
+        var lastError: Throwable? = null
+        for ((api, cfVersion) in APIS) {
+            try {
+                val conn = URL(api).openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 15_000
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                conn.setRequestProperty("User-Agent", "okhttp/3.12.1")
+                conn.setRequestProperty("CF-Client-Version", cfVersion)
+                conn.doOutput = true
+                try {
+                    conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                    if (conn.responseCode !in 200..299) {
+                        val errBody = runCatching {
+                            (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
+                        }.getOrNull() ?: ""
+                        throw RuntimeException("HTTP ${conn.responseCode} $errBody from $api")
+                    }
+                    val resp = JSONObject(conn.inputStream.bufferedReader().readText())
+                    return@runCatching parseResponse(resp, keypair.privateB64, keypair.publicB64)
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (e: Throwable) {
+                lastError = e
+                android.util.Log.w("WarpProvisioner", "API $api failed: ${e.message}")
             }
-            val resp = JSONObject(conn.inputStream.bufferedReader().readText())
-            parseResponse(resp, keypair.privateB64, keypair.publicB64)
-        } finally {
-            conn.disconnect()
         }
+        throw lastError ?: RuntimeException("WARP registration failed: all APIs failed")
     }
 
     private fun parseResponse(resp: JSONObject, privB64: String, pubB64: String): WarpAccount {
-        val config = resp.getJSONObject("config")
+        // Handle both direct and wrapped ("result") responses
+        val root = if (resp.has("result") && resp.optJSONObject("result") != null) resp.getJSONObject("result") else resp
+        val config = root.optJSONObject("config") ?: root.getJSONObject("config")
         val iface = config.getJSONObject("interface")
         val addresses = iface.getJSONObject("addresses")
-        val peer = config.getJSONArray("peers").getJSONObject(0)
-        val endpointHost = peer.getJSONObject("endpoint").optString("host").ifBlank { DEFAULT_ENDPOINT }
+        val peers = config.optJSONArray("peers") ?: config.getJSONArray("peers")
+        val peer = peers.getJSONObject(0)
+        val endpointObj = peer.optJSONObject("endpoint")
+        val endpointHost = when {
+            endpointObj != null -> endpointObj.optString("host").ifBlank { endpointObj.optString("v4").ifBlank { DEFAULT_ENDPOINT } }
+            else -> peer.optString("endpoint", DEFAULT_ENDPOINT)
+        }
+        // client_id can be top-level, inside config, or inside result.config
+        val clientId = when {
+            config.has("client_id") -> config.getString("client_id")
+            root.has("client_id") -> root.getString("client_id")
+            resp.has("client_id") -> resp.getString("client_id")
+            else -> error("No client_id in response: $resp")
+        }
         return WarpAccount(
             privateKeyB64 = privB64,
             publicKeyB64 = pubB64,
-            peerPublicKey = peer.getString("public_key"),
-            endpoint = normalizeEndpoint(endpointHost),
-            addressV4 = addresses.getString("v4"),
-            addressV6 = addresses.getString("v6"),
-            clientIdB64 = config.getString("client_id")
+            peerPublicKey = peer.optString("public_key").ifBlank { peer.getString("publicKey") },
+            endpoint = normalizeEndpoint(endpointHost.ifBlank { DEFAULT_ENDPOINT }),
+            addressV4 = addresses.optString("v4", "172.16.0.2"),
+            addressV6 = addresses.optString("v6", "2606:4700:110::2"),
+            clientIdB64 = clientId
         )
     }
 

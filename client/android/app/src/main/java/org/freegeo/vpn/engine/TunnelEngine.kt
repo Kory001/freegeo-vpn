@@ -1,6 +1,7 @@
 package org.freegeo.vpn.engine
 
 import android.content.Context
+import android.util.Log
 import org.freegeo.vpn.data.Node
 import org.freegeo.vpn.data.WarpAccount
 import org.json.JSONObject
@@ -20,20 +21,30 @@ object LibXrayBridge {
         val raw = try {
             libXray.LibXray.invoke(request.toString())
         } catch (t: Throwable) {
-            throw RuntimeException("libXray invoke failed: ${t.message}", t)
+            throw RuntimeException("libXray invoke failed (${t::class.simpleName}): ${t.message}", t)
         }
         return JSONObject(raw)
     }
 
     fun runXray(xrayJson: String): Result<Unit> = runCatching {
         val resp = invoke("runXray", JSONObject().put("xrayJson", xrayJson))
-        require(resp.optBoolean("success")) { resp.optString("error", "runXray failed") }
-    }.recoverCatching { e -> throw RuntimeException(e.message ?: "runXray failed", e) }
+        if (!resp.optBoolean("success")) {
+            val err = resp.optString("error", "runXray failed")
+            Log.e("TunnelEngine", "runXray failed: $err\nConfig: ${xrayJson.take(500)}")
+            error(err)
+        }
+    }
 
     fun stopXray(): Result<Unit> = runCatching {
-        val resp = invoke("stopXray", null)
-        require(resp.optBoolean("success")) { resp.optString("error", "stopXray failed") }
-    }.recoverCatching { e -> throw RuntimeException(e.message ?: "stopXray failed", e) }
+        try {
+            val resp = invoke("stopXray", null)
+            if (!resp.optBoolean("success")) {
+                Log.w("TunnelEngine", "stopXray: ${resp.optString("error")}")
+            }
+        } catch (t: Throwable) {
+            Log.w("TunnelEngine", "stopXray exception", t)
+        }
+    }
 
     fun isRunning(): Boolean = runCatching {
         invoke("getXrayState", null).optJSONObject("data")?.optBoolean("running") ?: false
@@ -43,6 +54,7 @@ object LibXrayBridge {
 class TunnelEngine(private val context: Context) {
 
     private var tun2socks: Process? = null
+    @Volatile private var lastTunError: String? = null
 
     fun start(node: Node, tunFd: Int): Result<Unit> =
         LibXrayBridge.runXray(XrayConfigBuilder.build(node)).mapCatching {
@@ -55,16 +67,26 @@ class TunnelEngine(private val context: Context) {
         }
 
     fun stop() {
-        runCatching { tun2socks?.destroy() }
+        try { tun2socks?.destroy() } catch (_: Throwable) {}
+        try { tun2socks?.waitFor() } catch (_: Throwable) {}
         tun2socks = null
         LibXrayBridge.stopXray()
     }
 
-    fun isAlive(): Boolean =
-        tun2socks?.isAlive == true && LibXrayBridge.isRunning()
+    fun isAlive(): Boolean {
+        val procAlive = tun2socks?.isAlive == true
+        val xrayAlive = LibXrayBridge.isRunning()
+        if (!procAlive && tun2socks != null) {
+            Log.w("TunnelEngine", "tun2socks died, lastError=$lastTunError xray=$xrayAlive")
+        }
+        return procAlive && xrayAlive
+    }
+
+    fun getLastError(): String? = lastTunError
 
     private fun startTun2Socks(tunFd: Int) {
-        val cfg = context.cacheDir.resolve("tun2socks.yml")
+        lastTunError = null
+        val cfg = File(context.cacheDir, "tun2socks.yml")
         cfg.writeText(
             """
             tunnel:
@@ -83,8 +105,38 @@ class TunnelEngine(private val context: Context) {
             """.trimIndent()
         )
         val bin = File(context.applicationInfo.nativeLibraryDir, "libtun2socks.so")
-        tun2socks = ProcessBuilder(bin.absolutePath, cfg.absolutePath, tunFd.toString())
+        if (!bin.exists()) {
+            error("tun2socks binary not found at ${bin.absolutePath} (ABI mismatch?)")
+        }
+        try { bin.setExecutable(true) } catch (_: Throwable) {}
+        if (!bin.canExecute()) {
+            Log.w("TunnelEngine", "tun2socks not executable, trying chmod")
+            try { Runtime.getRuntime().exec(arrayOf("chmod", "755", bin.absolutePath)).waitFor() } catch (_: Throwable) {}
+        }
+        Log.i("TunnelEngine", "Starting tun2socks: ${bin.absolutePath} ${cfg.absolutePath} $tunFd")
+        val proc = ProcessBuilder(bin.absolutePath, cfg.absolutePath, tunFd.toString())
             .redirectErrorStream(true)
             .start()
+        tun2socks = proc
+        Thread {
+            try {
+                proc.inputStream.bufferedReader().forEachLine { line ->
+                    lastTunError = line
+                    Log.w("TunnelEngine", "tun2socks: $line")
+                }
+                val code = proc.waitFor()
+                if (code != 0) {
+                    lastTunError = "tun2socks exit $code"
+                    Log.w("TunnelEngine", "tun2socks exited $code")
+                }
+            } catch (e: Throwable) {
+                Log.w("TunnelEngine", "tun2socks reader failed", e)
+            }
+        }.apply { isDaemon = true; start() }
+        Thread.sleep(400)
+        if (proc.isAlive.not()) {
+            val err = lastTunError ?: "unknown"
+            error("tun2socks failed to start: $err")
+        }
     }
 }
