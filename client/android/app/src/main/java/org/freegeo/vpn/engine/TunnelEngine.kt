@@ -17,19 +17,23 @@ object LibXrayBridge {
         if (payload != null) {
             request.put("payload", payload)
         }
-        val response = libXray.LibXray.invoke(request.toString())
-        return JSONObject(response)
+        val raw = try {
+            libXray.LibXray.invoke(request.toString())
+        } catch (t: Throwable) {
+            throw RuntimeException("libXray invoke failed: ${t.message}", t)
+        }
+        return JSONObject(raw)
     }
 
     fun runXray(xrayJson: String): Result<Unit> = runCatching {
         val resp = invoke("runXray", JSONObject().put("xrayJson", xrayJson))
         require(resp.optBoolean("success")) { resp.optString("error", "runXray failed") }
-    }
+    }.recoverCatching { e -> throw RuntimeException(e.message ?: "runXray failed", e) }
 
     fun stopXray(): Result<Unit> = runCatching {
         val resp = invoke("stopXray", null)
         require(resp.optBoolean("success")) { resp.optString("error", "stopXray failed") }
-    }
+    }.recoverCatching { e -> throw RuntimeException(e.message ?: "stopXray failed", e) }
 
     fun isRunning(): Boolean = runCatching {
         invoke("getXrayState", null).optJSONObject("data")?.optBoolean("running") ?: false

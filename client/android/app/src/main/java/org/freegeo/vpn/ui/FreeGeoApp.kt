@@ -213,10 +213,9 @@ private fun WarpQuickConnectCard(
                     }
                     else -> Button(
                         onClick = {
-                            viewModel.connectWarp(
-                                onReady = onWarpConnect,
-                                onError = {}
-                            )
+                            try { onWarpConnect() } catch (e: Throwable) {
+                                viewModel.failed(e.message ?: "Warp failed: ${e::class.simpleName}")
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.Black)
                     ) {

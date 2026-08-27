@@ -81,8 +81,8 @@ class FreeGeoVpnService : VpnService() {
                 }
                 updateNotification(getString(R.string.notif_connected, label))
                 monitorLoop()
-            } catch (e: Exception) {
-                fail(e.message ?: "Connection failed")
+            } catch (e: Throwable) {
+                fail(e.message ?: "Connection failed: ${e::class.simpleName}")
             }
         }
     }

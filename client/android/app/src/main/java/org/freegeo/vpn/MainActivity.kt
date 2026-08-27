@@ -17,12 +17,18 @@ class MainActivity : ComponentActivity() {
     private var pendingWarp: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Thread.setDefaultUncaughtExceptionHandler { _, e ->
+            try {
+                viewModel.failed("Crash: ${e.message ?: e::class.simpleName}")
+                android.util.Log.e("FreeGeo", "Uncaught", e)
+            } catch (_: Throwable) {}
+        }
         super.onCreate(savedInstanceState)
         setContent {
             FreeGeoApp(
                 viewModel = viewModel,
-                onConnectClick = { requestVpnAndConnectNode() },
-                onWarpConnectClick = { requestVpnAndConnectWarp() },
+                onConnectClick = { try { requestVpnAndConnectNode() } catch (e: Throwable) { viewModel.failed(e.message ?: "Failed") } },
+                onWarpConnectClick = { try { requestVpnAndConnectWarp() } catch (e: Throwable) { viewModel.failed(e.message ?: "WARP failed") } },
                 onDisconnectClick = { stopService(Intent(this, FreeGeoVpnService::class.java)) }
             )
         }
