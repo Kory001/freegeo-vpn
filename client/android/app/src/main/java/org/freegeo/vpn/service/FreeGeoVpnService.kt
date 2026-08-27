@@ -90,8 +90,15 @@ class FreeGeoVpnService : VpnService() {
     private suspend fun monitorLoop() {
         while (scope.isActive && state.value == ConnectionState.CONNECTED) {
             delay(3000)
-            if (engine?.isAlive() != true) {
-                fail("Tunnel dropped")
+            try {
+                val alive = engine?.isAlive() ?: false
+                val xray = try { org.freegeo.vpn.engine.LibXrayBridge.isRunning() } catch (_: Throwable) { false }
+                if (!alive || !xray) {
+                    fail("Tunnel dropped (tunAlive=$alive xray=$xray)")
+                    return
+                }
+            } catch (e: Throwable) {
+                fail("Monitor error: ${e.message}")
                 return
             }
         }

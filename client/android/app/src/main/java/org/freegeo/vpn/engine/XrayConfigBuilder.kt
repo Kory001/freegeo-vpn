@@ -25,6 +25,11 @@ object XrayConfigBuilder {
         root.put("dns", buildDns())
         root.put("inbounds", JSONArray().put(buildSocksInbound()))
 
+        fun ensureCIDR(addr: String): String = when {
+            addr.contains("/") -> addr
+            addr.contains(":") -> "$addr/128"
+            else -> "$addr/32"
+        }
         val wg = JSONObject()
             .put("tag", "proxy")
             .put("protocol", "wireguard")
@@ -32,7 +37,7 @@ object XrayConfigBuilder {
                 "settings",
                 JSONObject()
                     .put("secretKey", account.privateKeyB64)
-                    .put("address", JSONArray().put(account.addressV4).put(account.addressV6))
+                    .put("address", JSONArray().put(ensureCIDR(account.addressV4)).put(ensureCIDR(account.addressV6)))
                     .put("peers", JSONArray().put(
                         JSONObject()
                             .put("publicKey", account.peerPublicKey)
