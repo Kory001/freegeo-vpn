@@ -8,7 +8,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.SecureRandom
-import java.util.UUID
 
 data class WarpAccount(
     val privateKeyB64: String,
@@ -61,28 +60,34 @@ object WarpProvisioner {
 
     fun register(): Result<WarpAccount> = runCatching {
         val keypair = generateX25519Keypair()
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+        sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+        val tos = sdf.format(java.util.Date())
 
         val body = JSONObject()
             .put("key", keypair.publicB64)
-            .put("install_id", UUID.randomUUID().toString())
+            .put("install_id", "")
             .put("fcm_token", "")
-            .put("warp_enabled", true)
-            .put("tos", System.currentTimeMillis() / 1000)
+            .put("tos", tos)
             .put("type", "Android")
-            .put("model", "Android")
+            .put("model", "PC")
             .put("locale", "en_US")
 
         val conn = URL(API).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.connectTimeout = 10_000
         conn.readTimeout = 15_000
-        conn.setRequestProperty("Content-Type", "application/json")
+        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
         conn.setRequestProperty("User-Agent", "okhttp/3.12.1")
+        conn.setRequestProperty("CF-Client-Version", "a-6.30-2158")
         conn.doOutput = true
         try {
-            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             if (conn.responseCode !in 200..299) {
-                error("WARP registration failed: HTTP ${conn.responseCode}")
+                val errBody = runCatching {
+                    (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
+                }.getOrNull() ?: ""
+                error("WARP registration failed: HTTP ${conn.responseCode} $errBody")
             }
             val resp = JSONObject(conn.inputStream.bufferedReader().readText())
             parseResponse(resp, keypair.privateB64, keypair.publicB64)
