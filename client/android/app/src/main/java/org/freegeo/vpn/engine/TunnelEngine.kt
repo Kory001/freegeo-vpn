@@ -9,21 +9,36 @@ import java.io.File
 
 object LibXrayBridge {
 
-    const val API_VERSION = 2
+    private val API_VERSIONS_TO_TRY = intArrayOf(2, 1, 3, 0)
 
     fun invoke(method: String, payload: JSONObject?): JSONObject {
-        val request = JSONObject()
-            .put("apiVersion", API_VERSION)
-            .put("method", method)
-        if (payload != null) {
-            request.put("payload", payload)
+        var lastErr: Throwable? = null
+        for (ver in API_VERSIONS_TO_TRY) {
+            try {
+                val request = JSONObject().put("method", method)
+                if (ver != 0) request.put("apiVersion", ver)
+                if (payload != null) request.put("payload", payload)
+                val raw = try {
+                    libXray.LibXray.invoke(request.toString())
+                } catch (t: Throwable) {
+                    throw RuntimeException("libXray invoke failed (${t::class.simpleName}): ${t.message}", t)
+                }
+                val obj = JSONObject(raw)
+                if (!obj.optBoolean("success") && obj.optString("error").contains("unsupported apiVersion", ignoreCase = true)) {
+                    lastErr = RuntimeException(obj.optString("error"))
+                    android.util.Log.w("TunnelEngine", "apiVersion $ver unsupported, trying next")
+                    continue
+                }
+                return obj
+            } catch (t: Throwable) {
+                if (t.message?.contains("unsupported apiVersion", ignoreCase = true) == true) {
+                    lastErr = t
+                    continue
+                }
+                throw t
+            }
         }
-        val raw = try {
-            libXray.LibXray.invoke(request.toString())
-        } catch (t: Throwable) {
-            throw RuntimeException("libXray invoke failed (${t::class.simpleName}): ${t.message}", t)
-        }
-        return JSONObject(raw)
+        throw lastErr ?: RuntimeException("unsupported apiVersion: all versions failed")
     }
 
     fun runXray(xrayJson: String): Result<Unit> = runCatching {
