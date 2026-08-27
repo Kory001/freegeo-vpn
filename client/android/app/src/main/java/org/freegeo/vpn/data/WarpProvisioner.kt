@@ -109,7 +109,7 @@ object WarpProvisioner {
             endpoint = normalizeEndpoint(endpointHost),
             addressV4 = addresses.getString("v4"),
             addressV6 = addresses.getString("v6"),
-            clientIdB64 = resp.getString("client_id")
+            clientIdB64 = config.getString("client_id")
         )
     }
 
