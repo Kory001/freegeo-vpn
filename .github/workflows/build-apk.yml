@@ -37,11 +37,11 @@ jobs:
           ./gradlew assembleDebug --no-daemon --stacktrace --console=plain 2>&1 | tee /tmp/build.log
           STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
-            echo "### Build failed — last errors:" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Build failed — tail:" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            grep -E "^e:|error:|FAILED|Execution failed" /tmp/build.log | tail -40 >> "$GITHUB_STEP_SUMMARY" || tail -40 /tmp/build.log >> "$GITHUB_STEP_SUMMARY"
+            tail -120 /tmp/build.log >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            grep -E "^e:" /tmp/build.log | head -10 | while IFS= read -r line; do echo "::error::${line:0:300}"; done || true
+            tail -25 /tmp/build.log | while IFS= read -r line; do echo "::error::${line:0:400}"; done || true
             exit $STATUS
           fi
 
