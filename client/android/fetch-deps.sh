@@ -58,19 +58,17 @@ git clone --depth 1 --branch "$TUN2SOCKS_VER" --recursive \
   https://github.com/heiher/hev-socks5-tunnel /tmp/hev 2>&1 | tail -3
 
 echo "Building JNI shared libraries..."
-cd /tmp/hev
-# ndk-build expects jni/ subdirectory with Android.mk + Application.mk
-rm -rf jni && mkdir -p jni
-cp Android.mk Application.mk build.mk jni/
-ln -sf "$(pwd)/src" jni/src
-ln -sf "$(pwd)/third-part" jni/third-part
-NDK_PROJECT_PATH=/tmp/hev/jni "$NDK_BUILD" -j$(nproc) V=1 2>&1 | tail -40
+cd /tmp
+rm -rf hev-build && mkdir -p hev-build/jni
+cp -r /tmp/hev/src /tmp/hev/Android.mk /tmp/hev/Application.mk /tmp/hev/build.mk /tmp/hev/third-part hev-build/jni/
+cd hev-build
+"$NDK_BUILD" -j$(nproc) V=1 2>&1 | tail -40
 BUILD_RC=$?
 cd -
 
 JNI_OK=false
 for abi in arm64-v8a armeabi-v7a x86 x86_64; do
-  src="/tmp/hev/libs/$abi/libhev-socks5-tunnel.so"
+  src="/tmp/hev-build/libs/$abi/libhev-socks5-tunnel.so"
   if [ -f "$src" ]; then
     dir="app/src/main/jniLibs/$abi"
     mkdir -p "$dir"
