@@ -28,7 +28,7 @@ jobs:
         run: |
           set -o pipefail
           echo "Installing NDK 27..."
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" 2>&1 | tee /tmp/ndk.log | tail -20
+          yes | sdkmanager --install "ndk;27.0.12077973" 2>&1 | tee /tmp/ndk.log | tail -20
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
           ls -d $ANDROID_HOME/ndk/* 2>&1 | tee -a /tmp/ndk.log | head -20
           cat /tmp/ndk.log >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
