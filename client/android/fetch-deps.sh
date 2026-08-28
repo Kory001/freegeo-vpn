@@ -58,10 +58,15 @@ git clone --depth 1 --branch "$TUN2SOCKS_VER" --recursive \
   https://github.com/heiher/hev-socks5-tunnel /tmp/hev 2>&1 | tail -3
 
 echo "Building JNI shared libraries..."
+SCRIPT_DIR="$(pwd)"
 cd /tmp
 rm -rf hev-build && mkdir -p hev-build/jni
 cp -r /tmp/hev/src /tmp/hev/Android.mk /tmp/hev/Application.mk /tmp/hev/build.mk /tmp/hev/third-part hev-build/jni/
-# Disable ndk-build stripping so JNI_OnLoad stays in dynamic symbols
+# Replace upstream hev-jni.c with our own that uses standard JNI naming
+# (no #ifdef ANDROID, no RegisterNatives — JVM finds functions by name)
+rm -f hev-build/jni/src/hev-jni.c
+cp "$SCRIPT_DIR/app/src/main/jni/tun2socks_jni.c" hev-build/jni/src/hev-jni.c
+# Disable stripping
 cat >> hev-build/jni/Application.mk << 'EOF'
 APP_STRIP_MODE := none
 EOF
@@ -80,11 +85,11 @@ for abi in arm64-v8a armeabi-v7a x86 x86_64; do
     cp "$src" "$dir/libtun2socks.so"
     chmod 644 "$dir"/lib*.so
     SIZE=$(stat -c%s "$src")
-    # Check dynamic symbols (.dynsym) — this is what JVM uses via dlsym
-    DYNJNI=$(readelf --dyn-syms "$src" 2>/dev/null | grep -c "JNI_OnLoad" || true)
-    STRJNI=$(strings "$src" 2>/dev/null | grep -c "TProxyStartService" || true)
-    echo "  $abi: ${SIZE} bytes, dyn-symbols: ${DYNJNI}, strings: ${STRJNI}"
-    if [ "$DYNJNI" -gt 0 ]; then
+    # Check for our standard-named JNI functions in dynamic symbols
+    DYNJNI=$(readelf --dyn-syms "$src" 2>/dev/null | grep -c "Java_hev_htproxy" || true)
+    HAS_ONLOAD=$(readelf --dyn-syms "$src" 2>/dev/null | grep -c "JNI_OnLoad" || true)
+    echo "  $abi: ${SIZE} bytes, Java_*: ${DYNJNI}, JNI_OnLoad: ${HAS_ONLOAD}"
+    if [ "$DYNJNI" -gt 0 ] && [ "$HAS_ONLOAD" -gt 0 ]; then
       JNI_OK=true
     fi
   fi
