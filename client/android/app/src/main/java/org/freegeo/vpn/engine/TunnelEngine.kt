@@ -174,9 +174,12 @@ class TunnelEngine(private val context: Context) {
         } catch (e: Throwable) {
             // If JNI class not found or load failed, fall back to exec with detailed error
             if (e.message?.contains("failed to start") == true) throw e
-            Log.w("TunnelEngine", "JNI start failed, falling back to exec: ${e::class.simpleName} ${e.message}", e)
-            lastTunError = "JNI: ${e.message}"
+            val stack = android.util.Log.getStackTraceString(e)
+            Log.e("TunnelEngine", "JNI start failed: ${e::class.simpleName} ${e.message}\n$stack")
+            lastTunError = "JNI ${e::class.simpleName}: ${e.message}"
+            e.printStackTrace()
         }
+        val jniError = lastTunError
         // Fallback: exec (legacy, will exit 254 with VpnService but useful for diagnostics)
         val bin = File(context.applicationInfo.nativeLibraryDir, "libtun2socks.so")
         if (!bin.exists()) {
@@ -215,7 +218,7 @@ class TunnelEngine(private val context: Context) {
         Thread.sleep(400)
         if (proc.isAlive.not()) {
             val err = lastTunError ?: "unknown"
-            error("tun2socks failed to start: $err (JNI was $lastTunError)")
+            error("tun2socks failed to start: $err (JNI was $jniError)")
         }
     }
 }

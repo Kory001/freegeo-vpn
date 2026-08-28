@@ -29,7 +29,10 @@ if command -v ndk-build >/dev/null 2>&1 || [ -n "${ANDROID_NDK_HOME:-}" ]; then
   echo "Building hev-socks5-tunnel JNI via $NDK_BUILD"
   rm -rf /tmp/hev
   git clone --depth 1 --branch "$TUN2SOCKS_VER" --recursive https://github.com/heiher/hev-socks5-tunnel /tmp/hev 2>&1 | tail -5
-  (cd /tmp/hev && "$NDK_BUILD" -j4 2>&1 | tail -20)
+  echo "NDK_BUILD=$NDK_BUILD"
+  ls -lh "$NDK_BUILD" 2>&1 | head -3
+  (cd /tmp/hev && "$NDK_BUILD" -j4 2>&1 | tail -40)
+  BUILD_OK=true
   for abi in arm64-v8a armeabi-v7a x86 x86_64; do
     src="/tmp/hev/libs/$abi/libhev-socks5-tunnel.so"
     if [ -f "$src" ]; then
@@ -39,21 +42,25 @@ if command -v ndk-build >/dev/null 2>&1 || [ -n "${ANDROID_NDK_HOME:-}" ]; then
       cp "$src" "$dir/libhev-socks5-tunnel.so"
       chmod +x "$dir"/lib*.so
       echo "  $abi -> $(ls -lh "$dir"/lib*.so | awk '{print $9, $5}')"
+      # Verify JNI symbols
+      if ! nm -D "$src" 2>/dev/null | grep -q "TProxyStartService"; then
+        if ! strings "$src" | grep -q "TProxyStartService"; then
+          echo "ERROR: $src missing JNI TProxyStartService"
+          BUILD_OK=false
+        fi
+      fi
     else
-      echo "WARN: $src not found, falling back to executable"
+      echo "WARN: $src not found"
+      BUILD_OK=false
     fi
   done
-  # Fallback if build failed
-  if [ ! -f "app/src/main/jniLibs/arm64-v8a/libtun2socks.so" ]; then
-    echo "JNI build failed — falling back to executable download"
-    BASE="https://github.com/heiher/hev-socks5-tunnel/releases/download/$TUN2SOCKS_VER"
-    declare -A ABIS=([arm64-v8a]=arm64-v8a [armeabi-v7a]=armeabi-v7a [x86]=x86 [x86_64]=x86_64)
-    for abi in "${!ABIS[@]}"; do
-      dir="app/src/main/jniLibs/$abi"
-      mkdir -p "$dir"
-      curl -fsSL -o "$dir/libtun2socks.so" "$BASE/hev-socks5-tunnel-android-${ABIS[$abi]}"
-      chmod +x "$dir/libtun2socks.so"
-    done
+  if [ "$BUILD_OK" != "true" ]; then
+    echo "ERROR: JNI build verification failed — not falling back to executable (would give exit 254)"
+    echo "Contents of /tmp/hev/libs:"
+    find /tmp/hev -name "*.so" -ls 2>&1 | head -20
+    echo "NDK build log tail:"
+    cat /tmp/hev/build.log 2>&1 | tail -20 || true
+    exit 1
   fi
 else
   echo "NDK not found — using prebuilt executables (will fail with VpnService, exit 254)"
