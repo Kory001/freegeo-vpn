@@ -27,11 +27,27 @@ jobs:
       - name: Install NDK for hev-socks5-tunnel JNI
         run: |
           set -o pipefail
-          echo "Installing NDK 27..."
-          yes | sdkmanager --install "ndk;27.0.12077973" 2>&1 | tee /tmp/ndk.log | tail -20
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
-          ls -d $ANDROID_HOME/ndk/* 2>&1 | tee -a /tmp/ndk.log | head -20
+          echo "Checking preinstalled NDK..."
+          ls -d $ANDROID_HOME/ndk/* 2>&1 | tee /tmp/ndk.log | head -20
+          ls -d $ANDROID_NDK_ROOT 2>&1 | tee -a /tmp/ndk.log | head -5 || true
+          # Use preinstalled NDK if available, otherwise try install
+          if [ -d "$ANDROID_HOME/ndk/27.0.12077973" ]; then
+            echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+          elif [ -n "${ANDROID_NDK_ROOT:-}" ] && [ -d "$ANDROID_NDK_ROOT" ]; then
+            echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
+          elif [ -d "$ANDROID_HOME/ndk/26.1.10909125" ]; then
+            echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
+          else
+            echo "No preinstalled NDK, installing 27..."
+            yes | sdkmanager --install "ndk;27.0.12077973" 2>&1 | tee -a /tmp/ndk.log | tail -20 || echo "sdkmanager install failed, trying fallback"
+            ls -d $ANDROID_HOME/ndk/* 2>&1 | tee -a /tmp/ndk.log | head -20 || true
+            if [ -d "$ANDROID_HOME/ndk/27.0.12077973" ]; then
+              echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+            fi
+          fi
           cat /tmp/ndk.log >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+          echo "ANDROID_NDK_HOME will be:"
+          cat "$GITHUB_ENV" | grep ANDROID_NDK || true
 
       - name: Fetch tunnel deps (libXray + tun2socks)
         working-directory: client/android
