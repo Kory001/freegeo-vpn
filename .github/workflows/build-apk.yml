@@ -26,16 +26,28 @@ jobs:
 
       - name: Install NDK for hev-socks5-tunnel JNI
         run: |
+          set -o pipefail
           echo "Installing NDK 27..."
-          yes | sdkmanager --install "ndk;27.0.12077973" 2>&1 | tail -5
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" 2>&1 | tee /tmp/ndk.log | tail -20
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
-          ls -d $ANDROID_HOME/ndk/* | head
+          ls -d $ANDROID_HOME/ndk/* 2>&1 | tee -a /tmp/ndk.log | head -20
+          cat /tmp/ndk.log >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
 
       - name: Fetch tunnel deps (libXray + tun2socks)
         working-directory: client/android
         run: |
+          set -o pipefail
           chmod +x fetch-deps.sh
-          ./fetch-deps.sh
+          ./fetch-deps.sh 2>&1 | tee /tmp/fetch.log
+          STATUS=${PIPESTATUS[0]}
+          if [ $STATUS -ne 0 ]; then
+            echo "### fetch-deps failed — tail:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -150 /tmp/fetch.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -20 /tmp/fetch.log | while IFS= read -r line; do echo "::error::${line:0:400}"; done || true
+            exit $STATUS
+          fi
 
       - name: Build debug APK
         run: |
