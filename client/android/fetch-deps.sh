@@ -24,14 +24,16 @@ echo "==> tun2socks $TUN2SOCKS_VER (JNI build)"
 # We build the shared library via ndk-build which exposes
 # hev.htproxy.TProxyService.TProxyStartService(config,f d).
 if command -v ndk-build >/dev/null 2>&1 || [ -n "${ANDROID_NDK_HOME:-}" ]; then
-  NDK_BUILD="${ANDROID_NDK_HOME:-$(dirname "$(command -v ndk-build)")}/ndk-build"
-  if [ ! -x "$NDK_BUILD" ]; then NDK_BUILD="$(command -v ndk-build)"; fi
+  set +e
+  NDK_BUILD="${ANDROID_NDK_HOME:-$(dirname "$(command -v ndk-build 2>/dev/null)")}/ndk-build"
+  if [ ! -x "$NDK_BUILD" ]; then NDK_BUILD="$(command -v ndk-build 2>/dev/null || echo ndk-build)"; fi
   echo "Building hev-socks5-tunnel JNI via $NDK_BUILD"
   rm -rf /tmp/hev
   git clone --depth 1 --branch "$TUN2SOCKS_VER" --recursive https://github.com/heiher/hev-socks5-tunnel /tmp/hev 2>&1 | tail -5
   echo "NDK_BUILD=$NDK_BUILD"
-  ls -lh "$NDK_BUILD" 2>&1 | head -3
-  (cd /tmp/hev && "$NDK_BUILD" -j4 2>&1 | tail -40)
+  ls -lh "$NDK_BUILD" 2>&1 | head -3 || echo "ls NDK_BUILD failed, continuing"
+  (cd /tmp/hev && "$NDK_BUILD" -j4 2>&1 | tail -40) || echo "ndk-build finished with $?"
+  set -e
   BUILD_OK=true
   for abi in arm64-v8a armeabi-v7a x86 x86_64; do
     src="/tmp/hev/libs/$abi/libhev-socks5-tunnel.so"
