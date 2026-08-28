@@ -59,7 +59,12 @@ git clone --depth 1 --branch "$TUN2SOCKS_VER" --recursive \
 
 echo "Building JNI shared libraries..."
 cd /tmp/hev
-"$NDK_BUILD" -j$(nproc) V=1 2>&1 | tail -40
+# ndk-build expects jni/ subdirectory with Android.mk + Application.mk
+rm -rf jni && mkdir -p jni
+cp Android.mk Application.mk build.mk jni/
+ln -sf "$(pwd)/src" jni/src
+ln -sf "$(pwd)/third-part" jni/third-part
+NDK_PROJECT_PATH=/tmp/hev/jni "$NDK_BUILD" -j$(nproc) V=1 2>&1 | tail -40
 BUILD_RC=$?
 cd -
 
