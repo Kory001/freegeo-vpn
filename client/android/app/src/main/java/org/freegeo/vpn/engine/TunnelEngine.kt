@@ -2,6 +2,7 @@ package org.freegeo.vpn.engine
 
 import android.content.Context
 import android.util.Log
+import hev.htproxy.TProxyService
 import org.freegeo.vpn.data.Node
 import org.freegeo.vpn.data.WarpAccount
 import org.json.JSONObject
@@ -113,14 +114,18 @@ class TunnelEngine(private val context: Context) {
         try { tun2socks?.destroy() } catch (_: Throwable) {}
         try { tun2socks?.waitFor() } catch (_: Throwable) {}
         tun2socks = null
+        try { TProxyService.TProxyStopService() } catch (_: Throwable) {}
         LibXrayBridge.stopXray()
     }
 
     fun isAlive(): Boolean {
-        val procAlive = tun2socks?.isAlive == true
+        val procAlive = when {
+            tun2socks != null -> tun2socks?.isAlive == true
+            else -> try { TProxyService.TProxyIsRunning() } catch (_: Throwable) { false }
+        }
         val xrayAlive = LibXrayBridge.isRunning()
-        if (!procAlive && tun2socks != null) {
-            Log.w("TunnelEngine", "tun2socks died, lastError=$lastTunError xray=$xrayAlive")
+        if (!procAlive) {
+            Log.w("TunnelEngine", "tun2socks not alive, lastError=$lastTunError xray=$xrayAlive tun2socks=$tun2socks")
         }
         return procAlive && xrayAlive
     }
@@ -147,16 +152,47 @@ class TunnelEngine(private val context: Context) {
               log-level: warn
             """.trimIndent()
         )
+        // Primary: JNI via hev.htproxy.TProxyService (correct for VpnService fd)
+        try {
+            Log.i("TunnelEngine", "Starting tun2socks JNI: ${cfg.absolutePath} fd=$tunFd")
+            val ok = TProxyService.TProxyStartService(cfg.absolutePath, tunFd)
+            if (!ok) {
+                lastTunError = "TProxyStartService returned false"
+                Log.e("TunnelEngine", lastTunError!!)
+                error(lastTunError!!)
+            }
+            // Give it a moment to report running
+            Thread.sleep(400)
+            val running = try { TProxyService.TProxyIsRunning() } catch (_: Throwable) { true }
+            if (!running) {
+                lastTunError = "TProxy not running after start"
+                error(lastTunError!!)
+            }
+            tun2socks = null
+            Log.i("TunnelEngine", "tun2socks JNI started")
+            return
+        } catch (e: Throwable) {
+            // If JNI class not found or load failed, fall back to exec with detailed error
+            if (e.message?.contains("failed to start") == true) throw e
+            Log.w("TunnelEngine", "JNI start failed, falling back to exec: ${e::class.simpleName} ${e.message}", e)
+            lastTunError = "JNI: ${e.message}"
+        }
+        // Fallback: exec (legacy, will exit 254 with VpnService but useful for diagnostics)
         val bin = File(context.applicationInfo.nativeLibraryDir, "libtun2socks.so")
         if (!bin.exists()) {
-            error("tun2socks binary not found at ${bin.absolutePath} (ABI mismatch?)")
+            // also try libhev
+            val alt = File(context.applicationInfo.nativeLibraryDir, "libhev-socks5-tunnel.so")
+            if (alt.exists()) {
+                error("tun2socks JNI failed and exec fallback not suitable for VpnService (use JNI). JNI error: $lastTunError")
+            }
+            error("tun2socks binary not found at ${bin.absolutePath} (ABI mismatch?) JNI error: $lastTunError")
         }
         try { bin.setExecutable(true) } catch (_: Throwable) {}
         if (!bin.canExecute()) {
             Log.w("TunnelEngine", "tun2socks not executable, trying chmod")
             try { Runtime.getRuntime().exec(arrayOf("chmod", "755", bin.absolutePath)).waitFor() } catch (_: Throwable) {}
         }
-        Log.i("TunnelEngine", "Starting tun2socks: ${bin.absolutePath} ${cfg.absolutePath} $tunFd")
+        Log.i("TunnelEngine", "Starting tun2socks exec: ${bin.absolutePath} ${cfg.absolutePath} $tunFd")
         val proc = ProcessBuilder(bin.absolutePath, cfg.absolutePath, tunFd.toString())
             .redirectErrorStream(true)
             .start()
@@ -179,7 +215,7 @@ class TunnelEngine(private val context: Context) {
         Thread.sleep(400)
         if (proc.isAlive.not()) {
             val err = lastTunError ?: "unknown"
-            error("tun2socks failed to start: $err")
+            error("tun2socks failed to start: $err (JNI was $lastTunError)")
         }
     }
 }

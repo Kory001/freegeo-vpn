@@ -24,6 +24,13 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Install NDK for hev-socks5-tunnel JNI
+        run: |
+          echo "Installing NDK 27..."
+          yes | sdkmanager --install "ndk;27.0.12077973" 2>&1 | tail -5
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+          ls -d $ANDROID_HOME/ndk/* | head
+
       - name: Fetch tunnel deps (libXray + tun2socks)
         working-directory: client/android
         run: |
