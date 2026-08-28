@@ -61,6 +61,10 @@ echo "Building JNI shared libraries..."
 cd /tmp
 rm -rf hev-build && mkdir -p hev-build/jni
 cp -r /tmp/hev/src /tmp/hev/Android.mk /tmp/hev/Application.mk /tmp/hev/build.mk /tmp/hev/third-part hev-build/jni/
+# Disable ndk-build stripping so JNI_OnLoad stays in dynamic symbols
+cat >> hev-build/jni/Application.mk << 'EOF'
+APP_STRIP_MODE := none
+EOF
 cd hev-build
 "$NDK_BUILD" -j$(nproc) V=1 2>&1 | tail -40
 BUILD_RC=$?
@@ -76,9 +80,11 @@ for abi in arm64-v8a armeabi-v7a x86 x86_64; do
     cp "$src" "$dir/libtun2socks.so"
     chmod 644 "$dir"/lib*.so
     SIZE=$(stat -c%s "$src")
-    HAS_JNI=$(strings "$src" 2>/dev/null | grep -c "TProxyStartService" || true)
-    echo "  $abi: ${SIZE} bytes, JNI symbols: ${HAS_JNI}"
-    if [ "$HAS_JNI" -gt 0 ]; then
+    # Check dynamic symbols (.dynsym) — this is what JVM uses via dlsym
+    DYNJNI=$(readelf --dyn-syms "$src" 2>/dev/null | grep -c "JNI_OnLoad" || true)
+    STRJNI=$(strings "$src" 2>/dev/null | grep -c "TProxyStartService" || true)
+    echo "  $abi: ${SIZE} bytes, dyn-symbols: ${DYNJNI}, strings: ${STRJNI}"
+    if [ "$DYNJNI" -gt 0 ]; then
       JNI_OK=true
     fi
   fi
