@@ -23,47 +23,20 @@ jobs:
           java-version: "17"
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ndk;27.0.12077973
 
-      - name: Install NDK for hev-socks5-tunnel JNI
+      - name: Show NDK location
         run: |
-          set -o pipefail
-          echo "Checking preinstalled NDK..."
-          ls -d $ANDROID_HOME/ndk/* 2>&1 | tee /tmp/ndk.log | head -20
-          ls -d $ANDROID_NDK_ROOT 2>&1 | tee -a /tmp/ndk.log | head -5 || true
-          # Use preinstalled NDK if available, otherwise try install
-          if [ -d "$ANDROID_HOME/ndk/27.0.12077973" ]; then
-            echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
-          elif [ -n "${ANDROID_NDK_ROOT:-}" ] && [ -d "$ANDROID_NDK_ROOT" ]; then
-            echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
-          elif [ -d "$ANDROID_HOME/ndk/26.1.10909125" ]; then
-            echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
-          else
-            echo "No preinstalled NDK, installing 27..."
-            yes | sdkmanager --install "ndk;27.0.12077973" 2>&1 | tee -a /tmp/ndk.log | tail -20 || echo "sdkmanager install failed, trying fallback"
-            ls -d $ANDROID_HOME/ndk/* 2>&1 | tee -a /tmp/ndk.log | head -20 || true
-            if [ -d "$ANDROID_HOME/ndk/27.0.12077973" ]; then
-              echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
-            fi
-          fi
-          cat /tmp/ndk.log >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
-          echo "ANDROID_NDK_HOME will be:"
-          cat "$GITHUB_ENV" | grep ANDROID_NDK || true
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          find $ANDROID_HOME/ndk -maxdepth 2 -name ndk-build 2>/dev/null | head -5
+          echo "NDK_HOME=$(find $ANDROID_HOME/ndk -maxdepth 1 -type d 2>/dev/null | tail -n +2 | head -1)" >> $GITHUB_ENV
 
-      - name: Fetch tunnel deps (libXray + tun2socks)
+      - name: Fetch tunnel deps (libXray + tun2socks JNI)
         working-directory: client/android
         run: |
-          set -o pipefail
           chmod +x fetch-deps.sh
-          ./fetch-deps.sh 2>&1 | tee /tmp/fetch.log
-          STATUS=${PIPESTATUS[0]}
-          if [ $STATUS -ne 0 ]; then
-            echo "### fetch-deps failed — tail:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -150 /tmp/fetch.log >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -20 /tmp/fetch.log | while IFS= read -r line; do echo "::error::${line:0:400}"; done || true
-            exit $STATUS
-          fi
+          ./fetch-deps.sh
 
       - name: Build debug APK
         run: |
@@ -72,11 +45,10 @@ jobs:
           ./gradlew assembleDebug --no-daemon --stacktrace --console=plain 2>&1 | tee /tmp/build.log
           STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
-            echo "### Build failed — tail:" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Build failed — last 120 lines:" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             tail -120 /tmp/build.log >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -25 /tmp/build.log | while IFS= read -r line; do echo "::error::${line:0:400}"; done || true
             exit $STATUS
           fi
 
@@ -84,13 +56,3 @@ jobs:
         with:
           name: freegeo-debug-apk
           path: client/android/app/build/outputs/apk/debug/*.apk
-
-      - name: Build release APK (unsigned)
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
-
-      - uses: actions/upload-artifact@v5
-        if: startsWith(github.ref, 'refs/tags/v')
-        with:
-          name: freegeo-release-apk-unsigned
-          path: client/android/app/build/outputs/apk/release/*.apk

@@ -28,12 +28,12 @@ object LibXrayBridge {
                 val errStr = obj.optString("error")
                 if (!obj.optBoolean("success") && errStr.contains("unsupported apiVersion", ignoreCase = true)) {
                     lastErr = RuntimeException(errStr)
-                    android.util.Log.w("TunnelEngine", "apiVersion $ver unsupported, trying next")
+                    Log.w("TunnelEngine", "apiVersion $ver unsupported, trying next")
                     continue
                 }
                 if (!obj.optBoolean("success") && errStr.contains("unknown method", ignoreCase = true)) {
                     lastErr = RuntimeException(errStr)
-                    android.util.Log.w("TunnelEngine", "method $method unknown for ver $ver")
+                    Log.w("TunnelEngine", "method $method unknown for ver $ver")
                     continue
                 }
                 return obj
@@ -125,7 +125,7 @@ class TunnelEngine(private val context: Context) {
         }
         val xrayAlive = LibXrayBridge.isRunning()
         if (!procAlive) {
-            Log.w("TunnelEngine", "tun2socks not alive, lastError=$lastTunError xray=$xrayAlive tun2socks=$tun2socks")
+            Log.w("TunnelEngine", "tun2socks not alive, lastError=$lastTunError xray=$xrayAlive")
         }
         return procAlive && xrayAlive
     }
@@ -152,73 +152,27 @@ class TunnelEngine(private val context: Context) {
               log-level: warn
             """.trimIndent()
         )
-        // Primary: JNI via hev.htproxy.TProxyService (correct for VpnService fd)
+        Log.i("TunnelEngine", "Starting tun2socks JNI: fd=$tunFd config=${cfg.absolutePath}")
         try {
-            Log.i("TunnelEngine", "Starting tun2socks JNI: ${cfg.absolutePath} fd=$tunFd")
             val ok = TProxyService.TProxyStartService(cfg.absolutePath, tunFd)
             if (!ok) {
                 lastTunError = "TProxyStartService returned false"
                 Log.e("TunnelEngine", lastTunError!!)
                 error(lastTunError!!)
             }
-            // Give it a moment to report running
-            Thread.sleep(400)
+            Thread.sleep(500)
             val running = try { TProxyService.TProxyIsRunning() } catch (_: Throwable) { true }
             if (!running) {
-                lastTunError = "TProxy not running after start"
+                lastTunError = "tun2socks JNI started but not running"
+                Log.e("TunnelEngine", lastTunError!!)
                 error(lastTunError!!)
             }
             tun2socks = null
-            Log.i("TunnelEngine", "tun2socks JNI started")
-            return
+            Log.i("TunnelEngine", "tun2socks JNI connected")
         } catch (e: Throwable) {
-            // If JNI class not found or load failed, fall back to exec with detailed error
-            if (e.message?.contains("failed to start") == true) throw e
-            val stack = android.util.Log.getStackTraceString(e)
-            Log.e("TunnelEngine", "JNI start failed: ${e::class.simpleName} ${e.message}\n$stack")
-            lastTunError = "JNI ${e::class.simpleName}: ${e.message}"
-            e.printStackTrace()
-        }
-        val jniError = lastTunError
-        // Fallback: exec (legacy, will exit 254 with VpnService but useful for diagnostics)
-        val bin = File(context.applicationInfo.nativeLibraryDir, "libtun2socks.so")
-        if (!bin.exists()) {
-            // also try libhev
-            val alt = File(context.applicationInfo.nativeLibraryDir, "libhev-socks5-tunnel.so")
-            if (alt.exists()) {
-                error("tun2socks JNI failed and exec fallback not suitable for VpnService (use JNI). JNI error: $lastTunError")
-            }
-            error("tun2socks binary not found at ${bin.absolutePath} (ABI mismatch?) JNI error: $lastTunError")
-        }
-        try { bin.setExecutable(true) } catch (_: Throwable) {}
-        if (!bin.canExecute()) {
-            Log.w("TunnelEngine", "tun2socks not executable, trying chmod")
-            try { Runtime.getRuntime().exec(arrayOf("chmod", "755", bin.absolutePath)).waitFor() } catch (_: Throwable) {}
-        }
-        Log.i("TunnelEngine", "Starting tun2socks exec: ${bin.absolutePath} ${cfg.absolutePath} $tunFd")
-        val proc = ProcessBuilder(bin.absolutePath, cfg.absolutePath, tunFd.toString())
-            .redirectErrorStream(true)
-            .start()
-        tun2socks = proc
-        Thread {
-            try {
-                proc.inputStream.bufferedReader().forEachLine { line ->
-                    lastTunError = line
-                    Log.w("TunnelEngine", "tun2socks: $line")
-                }
-                val code = proc.waitFor()
-                if (code != 0) {
-                    lastTunError = "tun2socks exit $code"
-                    Log.w("TunnelEngine", "tun2socks exited $code")
-                }
-            } catch (e: Throwable) {
-                Log.w("TunnelEngine", "tun2socks reader failed", e)
-            }
-        }.apply { isDaemon = true; start() }
-        Thread.sleep(400)
-        if (proc.isAlive.not()) {
-            val err = lastTunError ?: "unknown"
-            error("tun2socks failed to start: $err (JNI was $jniError)")
+            lastTunError = "tun2socks JNI: ${e.message}"
+            Log.e("TunnelEngine", "tun2socks JNI failed", e)
+            error("tun2socks JNI failed: ${e.message}")
         }
     }
 }
